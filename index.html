@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Show and hide layers</title>
+    <meta
+      name="viewport"
+      content="initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.0/mapbox-gl.js"></script>
+    <link
+      href="https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.0/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <link href="loader.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@5/turf.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <style>
+      #menu-container {
+        top: 10px;
+        right: 10px;
+        position: absolute;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+      }
+      #menu {
+        background: #fff;
+        border-radius: 3px;
+        width: 120px;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        font-family: "Open Sans", sans-serif;
+      }
+
+      #menu a {
+        font-size: 13px;
+        color: #404040;
+        display: block;
+        margin: 0;
+        padding: 0;
+        padding: 10px;
+        text-decoration: none;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+        text-align: center;
+      }
+
+      #menu a:last-child {
+        border: none;
+      }
+
+      #menu a:hover {
+        background-color: #f8f8f8;
+        color: #404040;
+      }
+
+      #menu a.active {
+        background-color: #3887be;
+        color: #ffffff;
+      }
+
+      #menu a.active:hover {
+        background: #3074a4;
+      }
+
+      .map-overlay {
+        font: 12px/20px "Helvetica Neue", Arial, Helvetica, sans-serif;
+        background-color: #fff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        border-radius: 3px;
+        position: absolute;
+        width: 20%;
+        top: 10px;
+        left: 10px;
+        padding: 10px;
+        display: none;
+      }
+      #styles {
+        background: #fff;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 3px;
+        font-family: "Open Sans", sans-serif;
+      }
+      #styles label {
+        display: block;
+      }
+    </style>
+
+    <div id="map"></div>
+    <div id="menu-container">
+      <nav id="styles">
+        <label for="outdoors">
+          <input
+            id="outdoors-v11"
+            type="radio"
+            name="rtoggle"
+            value="outdoors"
+            checked="checked"
+            autocomplete="off"
+          />
+          Карта
+        </label>
+        <label for="satellite">
+          <input
+            id="satellite-v9"
+            type="radio"
+            name="rtoggle"
+            value="satellite"
+            autocomplete="off"
+          />
+          Спутник
+        </label>
+        <hr />
+        <label for="geoeye">
+          <input
+            id="geoeye"
+            type="checkbox"
+            name="rtoggle"
+            value="geoeye"
+            autocomplete="off"
+          />
+          Тулун (Затопление)
+        </label>
+      </nav>
+      <nav id="menu"></nav>
+    </div>
+    <div id="map-overlay" class="map-overlay"></div>
+    <script>
+      mapboxgl.accessToken =
+        "pk.eyJ1IjoiZHF1bmJwIiwiYSI6ImNqeG9wOTJxOTA0enYzaGwzbnprZjJjMmQifQ.1gCX0vqGsjIfA7JrjCb73Q";
+      var map = new mapboxgl.Map({
+        container: "map",
+        style: "mapbox://styles/mapbox/outdoors-v11",
+        zoom: 16,
+        center: [97.76094479302927, 55.94381769604647]
+      });
+
+      const sources = [
+        {
+          id: "birusa",
+          name: "Бирюса",
+          geojsonPath: "data/Birusa.geojson",
+          bbox: [
+            97.88496282816246,
+            55.98108030224705,
+            97.90303397678372,
+            56.00307183656026
+          ]
+        },
+        {
+          id: "brusinka",
+          name: "Бирюсинск",
+          geojsonPath: "data/Brusinka.geojson",
+          bbox: [
+            97.76094479302927,
+            55.94381769604647,
+            97.87051403376536,
+            55.98555254637297
+          ]
+        },
+        {
+          id: "nizhneudinsk",
+          name: "Нижнеудинск",
+          geojsonPath: "data/Nizhneudinsk.geojson",
+          bbox: [
+            98.97308209188779,
+            54.84812072081521,
+            99.10083300764248,
+            54.9279474945759
+          ]
+        },
+        {
+          id: "tulun",
+          name: "Тулун",
+          geojsonPath: "data/Tulun.geojson",
+          bbox: [
+            100.5495866525902,
+            54.52742813901667,
+            100.64027902257905,
+            54.57922869195597
+          ]
+        },
+        {
+          id: "shumsky",
+          name: "Шумский",
+          geojsonPath: "data/Shumsky.geojson",
+          bbox: [
+            99.11225488946418,
+            54.80935398086408,
+            99.15379341031027,
+            54.847298438086774
+          ]
+        }
+      ];
+
+      map.on("load", function() {
+        loadData();
+      });
+
+      function loadData() {
+        sources.forEach(source =>
+          map
+            .addSource(source.id, {
+              type: "geojson",
+              data: source.geojsonPath
+            })
+            .addLayer({
+              id: `${source.id}-fill`,
+              type: "fill",
+              source: source.id,
+              paint: {
+                "fill-color": "#3887be",
+                "fill-opacity": 0.5
+              }
+            })
+            .addLayer({
+              id: `${source.id}-stroke`,
+              type: "line",
+              source: source.id,
+              layout: {
+                visibility: "visible",
+                "line-join": "round",
+                "line-cap": "round"
+              },
+              paint: {
+                "line-color": "whitesmoke",
+                "line-width": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  13,
+                  0,
+                  16,
+                  2
+                ]
+              }
+            })
+        );
+        map.addSource("geoeye", {
+          type: "raster",
+          tiles: [
+            "https://rasters.aeronetlab.space/api/v0/cogs/tiles/{z}/{x}/{y}.png?uri=s3://cogs/29473/cog.tif"
+          ],
+          tileSize: 256,
+          attribution:
+            '<a target="_top" rel="noopener" href="https://www.maxar.com/">Maxar 2019</a>'
+        });
+      }
+
+      function eventFire(el, etype) {
+        if (el.fireEvent) {
+          el.fireEvent("on" + etype);
+        } else {
+          var evObj = document.createEvent("Events");
+          evObj.initEvent(etype, true, false);
+          el.dispatchEvent(evObj);
+        }
+      }
+
+      var initialCity = "tulun";
+      var overlay = document.getElementById("map-overlay");
+
+      function buildOverlay(sourceId) {
+        overlay.innerHTML = "";
+        var source = sources.find(s => s.id === sourceId);
+        var title = document.createElement("div");
+        var titleContent = document.createElement("h2");
+        titleContent.textContent = source.name;
+        title.appendChild(titleContent);
+
+        var downloadLink = document.createElement("a");
+        downloadLink.download = `${source.name}.geojson`;
+        downloadLink.textContent = "Скачать GeoJSON";
+        downloadLink.href = source.geojsonPath;
+        downloadLink.style.display = "block";
+
+        overlay.appendChild(title);
+
+        overlay.appendChild(downloadLink);
+        overlay.style.display = "block";
+      }
+
+      for (var i = 0; i < sources.length; i++) {
+        var id = sources[i].id;
+
+        var link = document.createElement("a");
+        link.id = id;
+        link.href = "#";
+        link.className = "";
+        link.textContent = sources[i].name;
+
+        link.onclick = function(e) {
+          var clickedLayer = this.textContent;
+          e.preventDefault();
+          e.stopPropagation();
+          var id = e.target.id;
+          var bounds = sources.find(s => s.id === id).bbox;
+          map.fitBounds(bounds, {
+            easing: () => 1
+          });
+          sources.forEach(s => (document.getElementById(s.id).className = ""));
+          e.target.className = "active";
+
+          overlay.innerHTML =
+            "<div class='lds-ring'><div></div><div></div><div></div><div></div></div>";
+          setTimeout(() => {
+            buildOverlay(id);
+          }, 500);
+        };
+
+        var layers = document.getElementById("menu");
+        layers.appendChild(link);
+      }
+      eventFire(document.getElementById(initialCity), "click");
+
+      var layerList = document.getElementById("styles");
+      var inputs = layerList.getElementsByTagName("input");
+
+      function switchLayer(layer) {
+        var layerId = layer.target.id;
+        map.setStyle("mapbox://styles/mapbox/" + layerId);
+        setTimeout(() => {
+          loadData();
+        }, 50);
+      }
+
+      for (var i = 0; i < inputs.length; i++) {
+        inputs[i].onclick = switchLayer;
+      }
+
+      var geoEye = document.getElementById("geoeye");
+      geoEye.onclick = function(e) {
+        if (e.target.checked)
+          map.addLayer(
+            {
+              id: "geoeye",
+              type: "raster",
+              source: "geoeye",
+              minzoom: 0,
+              maxzoom: 22
+            },
+            "tulun-fill"
+          );
+        else map.removeLayer("geoeye");
+      };
+    </script>
+  </body>
+</html>
